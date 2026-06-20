@@ -3,6 +3,7 @@ import { useLocation, Link } from 'react-router-dom'
 const navItems = [
   { path: '/', label: 'Dashboard', icon: '📊', section: 'Monitoring' },
   { path: '/alerts', label: 'Live Alerts', icon: '🔔', section: 'Monitoring' },
+  { path: '/scanner', label: 'Active Scanner', icon: '🎯', section: 'Security' },
   { path: '/file-integrity', label: 'File Integrity', icon: '🛡️', section: 'Security' },
   { path: '/rules', label: 'Detection Rules', icon: '⚙️', section: 'Security' },
 ]

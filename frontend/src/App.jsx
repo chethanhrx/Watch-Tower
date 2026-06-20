@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import LiveAlerts from './pages/LiveAlerts'
 import FileIntegrity from './pages/FileIntegrity'
 import Rules from './pages/Rules'
+import Scanner from './pages/Scanner'
 import Login from './pages/Login'
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
           <Route path="/alerts" element={<LiveAlerts />} />
           <Route path="/file-integrity" element={<FileIntegrity />} />
           <Route path="/rules" element={<Rules />} />
+          <Route path="/scanner" element={<Scanner />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

@@ -32,8 +32,8 @@ public class JwtAuthenticationFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
-        // Skip auth for public endpoints
-        if (isPublicPath(path)) {
+        // Skip auth for public endpoints and CORS preflight OPTIONS requests
+        if (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.OPTIONS || isPublicPath(path)) {
             return chain.filter(exchange);
         }
 

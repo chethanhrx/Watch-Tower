@@ -267,6 +267,16 @@ services:
     networks:
       - watchtower-net
 
+  active-scanner-service:
+    build:
+      context: ./services/active-scanner-service
+      dockerfile: Dockerfile
+    container_name: watchtower-active-scanner
+    ports:
+      - "8095:8095"
+    networks:
+      - watchtower-net
+
   # ─────────────────────────────────────────────
   # FRONTEND
   # ─────────────────────────────────────────────

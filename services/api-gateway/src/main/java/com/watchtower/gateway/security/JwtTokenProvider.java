@@ -83,6 +83,7 @@ public class JwtTokenProvider {
     }
 
     public Long getUserIdFromToken(String token) {
-        return validateAndExtractClaims(token).get("userId", Long.class);
+        Number userId = validateAndExtractClaims(token).get("userId", Number.class);
+        return userId != null ? userId.longValue() : null;
     }
 }

@@ -55,6 +55,13 @@ spring:
           filters:
             - StripPrefix=0
 
+        - id: active-scanner
+          uri: http://localhost:8095
+          predicates:
+            - Path=/api/v1/scanner/**
+          filters:
+            - StripPrefix=0
+
         - id: dashboard-api
           uri: http://localhost:8085
           predicates:
@@ -124,6 +131,13 @@ spring:
           uri: http://notification-service:8084
           predicates:
             - Path=/api/v1/notifications/**
+          filters:
+            - StripPrefix=0
+
+        - id: active-scanner
+          uri: http://active-scanner-service:8095
+          predicates:
+            - Path=/api/v1/scanner/**
           filters:
             - StripPrefix=0
 

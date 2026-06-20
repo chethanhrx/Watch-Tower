@@ -20,11 +20,15 @@ public class RateLimiterConfig {
                 return Mono.just(userId);
             }
             // Fall back to client IP for unauthenticated requests
-            return Mono.just(
-                    exchange.getRequest().getRemoteAddress() != null
-                            ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
-                            : "anonymous"
-            );
+            if (exchange.getRequest().getRemoteAddress() != null) {
+                java.net.InetAddress address = exchange.getRequest().getRemoteAddress().getAddress();
+                if (address != null) {
+                    return Mono.just(address.getHostAddress());
+                } else {
+                    return Mono.just(exchange.getRequest().getRemoteAddress().getHostString());
+                }
+            }
+            return Mono.just("anonymous");
         };
     }
 }
