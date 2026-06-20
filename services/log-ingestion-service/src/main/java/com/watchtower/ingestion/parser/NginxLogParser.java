@@ -21,7 +21,7 @@ public class NginxLogParser implements LogParser {
 
     // Combined log format pattern
     private static final Pattern NGINX_PATTERN = Pattern.compile(
-            "^(\\S+)\\s+\\S+\\s+(\\S+)\\s+\\[([^]]+)]\\s+\"(\\S+)\\s+(\\S+)\\s+(\\S+)\"\\s+(\\d{3})\\s+(\\d+)\\s+\"([^\"]*)\"\\s+\"([^\"]*)\"$"
+            "^(\\S+)\\s+\\S+\\s+(\\S+)\\s+\\[([^]]+)]\\s+\"(\\w+)\\s+(.*?)\\s+(HTTP/[\\d.]+)\"\\s+(\\d{3})\\s+(\\d+)\\s+\"([^\"]*)\"\\s+\"([^\"]*)\"$"
     );
 
     @Override

@@ -257,6 +257,16 @@ services:
     networks:
       - watchtower-net
 
+  ml-scoring-service:
+    build:
+      context: ./services/ml-scoring-service
+      dockerfile: Dockerfile
+    container_name: watchtower-ml-scoring
+    ports:
+      - "8090:8090"
+    networks:
+      - watchtower-net
+
   # ─────────────────────────────────────────────
   # FRONTEND
   # ─────────────────────────────────────────────
@@ -270,6 +280,7 @@ services:
       - "3000:80"
     depends_on:
       - api-gateway
+      - alert-dashboard-service
     networks:
       - watchtower-net
 
