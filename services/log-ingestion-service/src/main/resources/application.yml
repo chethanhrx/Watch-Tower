@@ -1,0 +1,47 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: log-ingestion-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ingestion_db
+    username: watchtower
+    password: watchtower_secret
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: public
+  kafka:
+    bootstrap-servers: localhost:29092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.type.mapping: normalizedLogEvent:com.watchtower.common.event.NormalizedLogEvent
+  elasticsearch:
+    uris: http://localhost:9200
+  # Enable virtual threads for high-throughput I/O
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/ingestion_db
+  kafka:
+    bootstrap-servers: kafka:9092
+  elasticsearch:
+    uris: http://elasticsearch:9200

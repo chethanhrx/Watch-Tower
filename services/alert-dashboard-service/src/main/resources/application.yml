@@ -1,0 +1,32 @@
+server:
+  port: 8085
+spring:
+  application:
+    name: alert-dashboard-service
+  kafka:
+    bootstrap-servers: localhost:29092
+    consumer:
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+  elasticsearch:
+    uris: http://localhost:9200
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  kafka:
+    bootstrap-servers: kafka:9092
+  elasticsearch:
+    uris: http://elasticsearch:9200

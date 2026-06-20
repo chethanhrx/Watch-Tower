@@ -1,0 +1,140 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # R2DBC (reactive Postgres)
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/gateway_db
+    username: watchtower
+    password: watchtower_secret
+
+  # Redis for rate limiting
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # Cloud Gateway routes
+  cloud:
+    gateway:
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 20
+            redis-rate-limiter.burstCapacity: 40
+            key-resolver: "#{@userKeyResolver}"
+      routes:
+        - id: log-ingestion
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/logs/**
+          filters:
+            - StripPrefix=0
+
+        - id: threat-detection
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/detection/**,/api/v1/rules/**
+          filters:
+            - StripPrefix=0
+
+        - id: file-integrity
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/fim/**
+          filters:
+            - StripPrefix=0
+
+        - id: notifications
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - StripPrefix=0
+
+        - id: dashboard-api
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/v1/dashboard/**,/api/v1/alerts/**
+          filters:
+            - StripPrefix=0
+
+        - id: dashboard-websocket
+          uri: ws://localhost:8085
+          predicates:
+            - Path=/ws/**
+
+# JWT configuration
+watchtower:
+  jwt:
+    # IMPORTANT: Change this in production. Minimum 64 characters for HS256.
+    secret: "WatchTower-JWT-Secret-Key-Change-In-Production-Must-Be-At-Least-64-Characters-Long!"
+    expiration-ms: 900000         # 15 minutes
+    refresh-expiration-ms: 604800000  # 7 days
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+---
+# Docker profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+  r2dbc:
+    url: r2dbc:postgresql://postgres:5432/gateway_db
+  data:
+    redis:
+      host: redis
+  cloud:
+    gateway:
+      routes:
+        - id: log-ingestion
+          uri: http://log-ingestion-service:8081
+          predicates:
+            - Path=/api/v1/logs/**
+          filters:
+            - StripPrefix=0
+
+        - id: threat-detection
+          uri: http://threat-detection-service:8082
+          predicates:
+            - Path=/api/v1/detection/**,/api/v1/rules/**
+          filters:
+            - StripPrefix=0
+
+        - id: file-integrity
+          uri: http://file-integrity-service:8083
+          predicates:
+            - Path=/api/v1/fim/**
+          filters:
+            - StripPrefix=0
+
+        - id: notifications
+          uri: http://notification-service:8084
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - StripPrefix=0
+
+        - id: dashboard-api
+          uri: http://alert-dashboard-service:8085
+          predicates:
+            - Path=/api/v1/dashboard/**,/api/v1/alerts/**
+          filters:
+            - StripPrefix=0
+
+        - id: dashboard-websocket
+          uri: ws://alert-dashboard-service:8085
+          predicates:
+            - Path=/ws/**

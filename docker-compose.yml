@@ -1,0 +1,283 @@
+version: '3.9'
+
+services:
+  # ─────────────────────────────────────────────
+  # INFRASTRUCTURE
+  # ─────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: watchtower-postgres
+    environment:
+      POSTGRES_USER: watchtower
+      POSTGRES_PASSWORD: watchtower_secret
+      POSTGRES_DB: watchtower
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U watchtower"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - watchtower-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: watchtower-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - watchtower-net
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: watchtower-kafka
+    environment:
+      # KRaft mode — no Zookeeper required
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: 'WatchTowerKafkaClusterId01'
+    ports:
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    networks:
+      - watchtower-net
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: watchtower-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      echo 'Creating Kafka topics...'
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic raw-logs --partitions 6 --replication-factor 1
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic security-alerts --partitions 3 --replication-factor 1
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic fim-events --partitions 3 --replication-factor 1
+      echo 'Topics created successfully.'
+      "
+    networks:
+      - watchtower-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: watchtower-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    networks:
+      - watchtower-net
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: watchtower-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  # ─────────────────────────────────────────────
+  # MICROSERVICES
+  # ─────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: watchtower-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gateway_db
+      SPRING_DATASOURCE_USERNAME: watchtower
+      SPRING_DATASOURCE_PASSWORD: watchtower_secret
+      SPRING_DATA_REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  log-ingestion-service:
+    build:
+      context: .
+      dockerfile: services/log-ingestion-service/Dockerfile
+    container_name: watchtower-log-ingestion
+    ports:
+      - "8081:8081"
+      - "5514:5514"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ingestion_db
+      SPRING_DATASOURCE_USERNAME: watchtower
+      SPRING_DATASOURCE_PASSWORD: watchtower_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  threat-detection-service:
+    build:
+      context: .
+      dockerfile: services/threat-detection-service/Dockerfile
+    container_name: watchtower-threat-detection
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/detection_db
+      SPRING_DATASOURCE_USERNAME: watchtower
+      SPRING_DATASOURCE_PASSWORD: watchtower_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATA_REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  file-integrity-service:
+    build:
+      context: .
+      dockerfile: services/file-integrity-service/Dockerfile
+    container_name: watchtower-file-integrity
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fim_db
+      SPRING_DATASOURCE_USERNAME: watchtower
+      SPRING_DATASOURCE_PASSWORD: watchtower_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - fim_watch_dir:/watch    # Directory to monitor for integrity changes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: watchtower-notification
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: watchtower
+      SPRING_DATASOURCE_PASSWORD: watchtower_secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  alert-dashboard-service:
+    build:
+      context: .
+      dockerfile: services/alert-dashboard-service/Dockerfile
+    container_name: watchtower-alert-dashboard
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+    depends_on:
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - watchtower-net
+
+  # ─────────────────────────────────────────────
+  # FRONTEND
+  # ─────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: watchtower-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - watchtower-net
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+  fim_watch_dir:
+
+networks:
+  watchtower-net:
+    driver: bridge

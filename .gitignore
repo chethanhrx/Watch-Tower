@@ -1,0 +1,39 @@
+# ── Build outputs ──
+target/
+build/
+*.class
+*.jar
+*.war
+
+# ── IDE ──
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+*.swo
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Env & secrets ──
+.env
+*.env.local
+
+# ── Logs ──
+*.log
+logs/
+
+# ── Node (frontend) ──
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# ── Docker volumes ──
+docker/data/
+
+# ── Maven wrapper ──
+!.mvn/wrapper/maven-wrapper.jar

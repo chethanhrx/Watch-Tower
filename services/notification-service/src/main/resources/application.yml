@@ -1,0 +1,48 @@
+server:
+  port: 8084
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/notification_db
+    username: watchtower
+    password: watchtower_secret
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: localhost:29092
+    consumer:
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:watchtower@example.com}
+    password: ${MAIL_PASSWORD:changeme}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+watchtower:
+  notification:
+    email:
+      to: admin@watchtower.io
+      from: alerts@watchtower.io
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/notification_db
+  kafka:
+    bootstrap-servers: kafka:9092
